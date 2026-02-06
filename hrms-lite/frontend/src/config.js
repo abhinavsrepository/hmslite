@@ -5,7 +5,7 @@
 const isProduction = import.meta.env.PROD;
 
 export const API_BASE_URL = isProduction 
-  ? '/api'  // Unified Vercel deployment
+  ? ''  // Unified Vercel deployment - routes already include /api
   : (import.meta.env.VITE_API_URL || '');
 
 // For debugging
