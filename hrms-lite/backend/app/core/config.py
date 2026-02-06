@@ -25,9 +25,11 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=False, description="Debug mode")
     RELOAD: bool = Field(default=False, description="Auto-reload on code changes")
     
-    # Database - Use /tmp for serverless (Vercel), local path for development
+    # Database path - Railway uses /data (persistent), Vercel uses /tmp, local uses default
     DB_PATH: str = Field(
-        default="/tmp/hrms.db" if os.getenv("VERCEL") else "hrms.db",
+        default=("/data/hrms.db" if os.getenv("RAILWAY_ENVIRONMENT") 
+                else "/tmp/hrms.db" if os.getenv("VERCEL")
+                else "hrms.db"),
         description="SQLite database file path"
     )
     
