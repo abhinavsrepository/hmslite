@@ -1,0 +1,5 @@
+export { default as Dashboard } from './Dashboard'
+export { default as EmployeeForm } from './employees/EmployeeForm'
+export { default as EmployeeList } from './employees/EmployeeList'
+export { default as AttendanceForm } from './attendance/AttendanceForm'
+export { default as AttendanceList } from './attendance/AttendanceList'

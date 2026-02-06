@@ -1,0 +1,31 @@
+# Ignore development files
+node_modules
+.git
+__pycache__
+*.pyc
+.env
+.venv
+venv/
+
+# Ignore local database (don't deploy local data)
+hrms.db
+*.db
+
+# Ignore tests
+tests/
+*.test.js
+*.test.py
+
+# Ignore docs (optional)
+*.md
+!README.md
+
+# Ignore IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Ignore OS files
+.DS_Store
+Thumbs.db

@@ -1,44 +1,29 @@
-import sqlite3
-from contextlib import contextmanager
+"""
+Legacy database module - redirects to the new modular structure.
 
+This module is kept for backward compatibility.
+For new development, use `app.db.database` instead.
+"""
+import warnings
+
+warnings.warn(
+    "This module is deprecated. Use 'app.db.database' instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
+# Import and re-export from new structure
+from app.db.database import (
+    Database,
+    get_database,
+    get_db_connection,
+)
+
+# Legacy compatibility
 DB_PATH = "hrms.db"
 
 
-@contextmanager
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
 def init_db():
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS employees (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                department TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS attendance (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                employee_id TEXT NOT NULL,
-                date TEXT NOT NULL,
-                status TEXT NOT NULL,
-                FOREIGN KEY (employee_id) REFERENCES employees (id),
-                UNIQUE(employee_id, date)
-            )
-        """)
-        conn.commit()
-
-
-if __name__ == "__main__":
-    init_db()
-    print("Database initialized successfully")
+    """Legacy init_db function - redirects to new implementation."""
+    from app.db.init_db import init_database
+    init_database()

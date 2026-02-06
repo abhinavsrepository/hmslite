@@ -1,0 +1,12 @@
+{
+  "name": "hrms-lite",
+  "version": "1.0.0",
+  "description": "HRMS Lite - Full Stack HR Management System",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "dev": "concurrently \"cd backend && python run.py --dev\" \"cd frontend && npm run dev\"",
+    "install:all": "npm install && cd frontend && npm install && cd ../backend && pip install -r requirements.txt"
+  },
+  "keywords": ["hrms", "hr", "attendance", "employees"],
+  "license": "MIT"
+}

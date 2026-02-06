@@ -1,16 +1,96 @@
-# React + Vite
+# HRMS Lite Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite frontend for the HRMS Lite application.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 1. Install Dependencies
 
-## React Compiler
+```bash
+npm install
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 2. Start the Backend Server
 
-## Expanding the ESLint configuration
+In a separate terminal:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+cd ../backend
+python run.py --dev
+```
+
+The backend will start on http://localhost:8000
+
+### 3. Start the Frontend Dev Server
+
+```bash
+npm run dev
+```
+
+The frontend will start on http://localhost:5173
+
+## API Connection
+
+The frontend uses a **Vite proxy** to forward API requests to the backend:
+
+- Frontend URL: `http://localhost:5173`
+- Backend URL: `http://localhost:8000`
+- API calls from frontend: `/api/employees` → proxied to → `http://localhost:8000/api/employees`
+
+This setup avoids CORS issues during development.
+
+## Environment Variables
+
+Create a `.env` file (already created):
+
+```env
+# Empty = use Vite proxy (recommended for development)
+VITE_API_URL=
+
+# Or use full URL (will cause CORS issues if backend not configured properly)
+# VITE_API_URL=http://localhost:8000
+```
+
+## Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
+
+## Project Structure
+
+```
+src/
+├── components/          # React components
+│   ├── common/         # Reusable UI components
+│   ├── employees/      # Employee-related components
+│   └── attendance/     # Attendance-related components
+├── hooks/              # Custom React hooks
+├── services/           # API service functions
+├── utils/              # Helper utilities
+├── config.js           # App configuration
+└── App.jsx             # Main application
+```
+
+## Troubleshooting
+
+### API Connection Issues
+
+1. Make sure backend is running on port 8000
+2. Check browser console for error messages
+3. Verify the Vite proxy config in `vite.config.js`
+
+### CORS Errors
+
+If you see CORS errors:
+- The Vite proxy should handle this automatically
+- Make sure you're using relative URLs (`/api/...`) not absolute URLs
+
+### 500 Errors
+
+Clear Vite cache:
+```bash
+rm -rf node_modules/.vite
+npm run dev
+```
