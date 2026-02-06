@@ -100,9 +100,13 @@ def root():
 @app.get("/health", tags=["health"])
 def health_check():
     """Health check endpoint."""
+    import os
+    settings = get_settings()
     return {
         "status": "healthy",
-        "version": get_settings().APP_VERSION,
+        "version": settings.APP_VERSION,
+        "environment": "vercel" if os.getenv("VERCEL") else "other",
+        "database": settings.DB_PATH,
         "timestamp": datetime.now().isoformat()
     }
 
