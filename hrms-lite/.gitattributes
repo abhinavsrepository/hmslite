@@ -1,0 +1,28 @@
+# HRMS Lite - Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# HRMS Lite - Backend
+backend/venv/
+backend/*.db
+backend/*.log
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
