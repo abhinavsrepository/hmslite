@@ -5,7 +5,7 @@
       "src": "frontend/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "frontend/dist"
+        "distDir": "dist"
       }
     },
     {
@@ -32,7 +32,7 @@
     },
     {
       "source": "/((?!.*\\.).*)",
-      "destination": "frontend/dist/index.html"
+      "destination": "/index.html"
     }
   ]
 }
