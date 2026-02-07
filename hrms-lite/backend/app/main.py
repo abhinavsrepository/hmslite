@@ -3,11 +3,14 @@ HRMS Lite API Application
 
 A lightweight Human Resource Management System API built with FastAPI.
 """
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
@@ -127,35 +130,60 @@ def create_application() -> FastAPI:
 app = create_application()
 
 
-@app.get("/", tags=["root"])
-def root():
-    """Root endpoint with API information."""
-    settings = get_settings()
-    return {
-        "message": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-        "docs": "/docs",
-        "endpoints": {
-            "employees": "/api/employees",
-            "attendance": "/api/attendance",
-            "health": "/health",
-            "dashboard": "/api/attendance/dashboard/summary",
-        }
-    }
-
-
 @app.get("/health", tags=["health"])
 def health_check():
     """Health check endpoint."""
-    import os
     settings = get_settings()
     return {
         "status": "healthy",
         "version": settings.APP_VERSION,
-        "environment": "vercel" if os.getenv("VERCEL") else "other",
-        "database": settings.DB_PATH,
+        "environment": "render" if os.getenv("RENDER") else "vercel" if os.getenv("VERCEL") else "local",
+        "db_type": settings.DB_TYPE,
         "timestamp": datetime.now().isoformat()
     }
+
+
+# --- Serve React frontend static files ---
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+if STATIC_DIR.is_dir():
+    logger.info(f"Serving frontend static files from {STATIC_DIR}")
+
+    # Mount static assets (JS, CSS, images) at /assets
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    # Catch-all: serve index.html for any non-API route (SPA client-side routing)
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        """Serve React app for all non-API routes."""
+        # Try to serve the exact static file first (e.g. favicon.ico, robots.txt)
+        file_path = STATIC_DIR / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(str(file_path))
+        # Otherwise return index.html for SPA routing
+        index_path = STATIC_DIR / "index.html"
+        if index_path.is_file():
+            return FileResponse(str(index_path))
+        return JSONResponse({"detail": "Frontend not built"}, status_code=404)
+else:
+    logger.info("No static directory found -- API-only mode")
+
+    @app.get("/", tags=["root"])
+    def root():
+        """Root endpoint with API information (no frontend)."""
+        settings = get_settings()
+        return {
+            "message": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "docs": "/docs",
+            "endpoints": {
+                "employees": "/api/employees",
+                "attendance": "/api/attendance",
+                "health": "/health",
+            }
+        }
 
 
 if __name__ == "__main__":

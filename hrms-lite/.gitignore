@@ -2,18 +2,19 @@ node_modules
 dist
 .DS_Store
 *.log
+.env
 .env.local
 .env.*.local
 .vscode/
 .idea/
-hrms-lite/backend/.env
-hrms-lite/backend/__pycache__/
-hrms-lite/backend/venv/
-hrms-lite/backend/app/__pycache__/
-hrms-lite/backend/app/core/__pycache__/
-hrms-lite/backend/app/db/__pycache__/
-hrms-lite/backend/app/models/__pycache__/
-hrms-lite/backend/app/schemas/__pycache__/
-hrms-lite/backend/app/services/__pycache__/
-hrms-lite/backend/app/utils/__pycache__/
-hrms-lite/backend/hrms.db
+
+# Python
+__pycache__/
+*.pyc
+venv/
+backend/venv/
+backend/hrms.db
+backend/static/
+
+# Render/Vercel build artifacts
+backend/static/

@@ -43,9 +43,9 @@ class Settings(BaseSettings):
         description="SQLite database file path",
     )
 
-    # MongoDB settings
+    # MongoDB settings (set MONGODB_URI via environment variable or .env file)
     MONGODB_URI: str = Field(
-        default="mongodb+srv://abhi2510979b_db_user:ZWDcqnkXuD5PUGPA@cluster0.negeuoc.mongodb.net/?appName=Cluster0",
+        default="",
         description="MongoDB connection URI",
     )
     MONGODB_DB_NAME: str = Field(default="hrms", description="MongoDB database name")

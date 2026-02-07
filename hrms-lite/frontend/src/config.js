@@ -12,7 +12,7 @@ const getApiBaseUrl = () => {
     return import.meta.env.VITE_API_URL;
   }
   
-  // Production (unified deployment on Vercel)
+  // Production (unified deployment on Vercel/Render)
   if (isProduction) {
     return ''; // Empty = same origin, calls go to /api/*
   }
