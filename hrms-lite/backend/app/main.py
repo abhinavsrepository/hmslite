@@ -6,14 +6,61 @@ A lightweight Human Resource Management System API built with FastAPI.
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
 from app.core.config import get_settings
 from app.core.logging_config import setup_logging, get_logger
 from app.db.init_db import init_database
 from app.api.v1.router import api_router
+
+
+class CORSMiddlewareWithErrors(BaseHTTPMiddleware):
+    """Custom CORS middleware that adds headers to all responses including errors."""
+    
+    def __init__(self, app, allow_origins=None, allow_methods=None, allow_headers=None, allow_credentials=True):
+        super().__init__(app)
+        self.allow_origins = allow_origins or ["*"]
+        self.allow_methods = allow_methods or ["*"]
+        self.allow_headers = allow_headers or ["*"]
+        self.allow_credentials = allow_credentials
+    
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin", "")
+        
+        # Determine allowed origin
+        if "*" in self.allow_origins:
+            allowed_origin = origin or "*"
+        else:
+            allowed_origin = origin if origin in self.allow_origins else self.allow_origins[0] if self.allow_origins else "*"
+        
+        # Handle preflight requests
+        if request.method == "OPTIONS":
+            response = JSONResponse(content={})
+            response.headers["Access-Control-Allow-Origin"] = allowed_origin
+            response.headers["Access-Control-Allow-Methods"] = ", ".join(self.allow_methods) if self.allow_methods != ["*"] else "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = ", ".join(self.allow_headers) if self.allow_headers != ["*"] else "*"
+            if self.allow_credentials:
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+            return response
+        
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            logger.error(f"Unhandled exception: {exc}", exc_info=True)
+            response = JSONResponse(
+                status_code=500,
+                content={"detail": "Internal server error", "message": str(exc)}
+            )
+        
+        # Add CORS headers to response
+        response.headers["Access-Control-Allow-Origin"] = allowed_origin
+        if self.allow_credentials:
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        
+        return response
 
 # Setup logging
 setup_logging()
@@ -61,9 +108,9 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
     )
     
-    # Configure CORS
+    # Configure CORS with custom middleware that handles errors
     app.add_middleware(
-        CORSMiddleware,
+        CORSMiddlewareWithErrors,
         allow_origins=settings.CORS_ORIGINS,
         allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
         allow_methods=settings.CORS_ALLOW_METHODS,

@@ -1,8 +1,9 @@
 """
 Attendance service layer for business logic.
+Supports both SQLite and MongoDB.
 """
 from typing import List
-from datetime import date
+from datetime import date, datetime
 
 from app.db.database import get_database, Database
 from app.schemas.attendance import (
@@ -22,6 +23,9 @@ from app.core.exceptions import (
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+ATTENDANCE_COLLECTION = "attendance"
+EMPLOYEE_COLLECTION = "employees"
 
 
 class AttendanceService:
@@ -53,36 +57,59 @@ class AttendanceService:
         if not self.employee_service.employee_exists(attendance.employee_id):
             raise_not_found("Employee", attendance.employee_id)
         
-        # Check for duplicate entry
-        existing = self.db.execute(
-            """
-            SELECT id FROM attendance 
-            WHERE employee_id = ? AND date = ?
-            """,
-            (attendance.employee_id, attendance.date),
-            fetch_one=True
-        )
-        if existing:
-            raise_duplicate("Attendance record", "date")
-        
-        # Insert attendance
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO attendance (employee_id, date, status) 
-                VALUES (?, ?, ?)
-                """,
-                (attendance.employee_id, attendance.date, attendance.status)
+        if self.db.is_mongodb:
+            # MongoDB
+            # Check for duplicate entry
+            existing = self.db.find_one(
+                ATTENDANCE_COLLECTION,
+                {"employee_id": attendance.employee_id, "date": attendance.date}
             )
-            conn.commit()
-            new_id = cursor.lastrowid
+            if existing:
+                raise_duplicate("Attendance record", "date")
             
-            # Fetch created record
-            cursor.execute("SELECT * FROM attendance WHERE id = ?", (new_id,))
-            row = cursor.fetchone()
-            logger.info(f"Attendance created: {new_id}")
-            return AttendanceResponse(**dict(row))
+            # Insert attendance
+            document = {
+                "employee_id": attendance.employee_id,
+                "date": attendance.date,
+                "status": attendance.status,
+                "created_at": datetime.utcnow()
+            }
+            inserted_id = self.db.insert_one(ATTENDANCE_COLLECTION, document)
+            document["id"] = inserted_id
+            logger.info(f"Attendance created: {inserted_id}")
+            return AttendanceResponse(**document)
+        else:
+            # SQLite
+            # Check for duplicate entry
+            existing = self.db.execute(
+                """
+                SELECT id FROM attendance 
+                WHERE employee_id = ? AND date = ?
+                """,
+                (attendance.employee_id, attendance.date),
+                fetch_one=True
+            )
+            if existing:
+                raise_duplicate("Attendance record", "date")
+            
+            # Insert attendance
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO attendance (employee_id, date, status) 
+                    VALUES (?, ?, ?)
+                    """,
+                    (attendance.employee_id, attendance.date, attendance.status)
+                )
+                conn.commit()
+                new_id = cursor.lastrowid
+                
+                # Fetch created record
+                cursor.execute("SELECT * FROM attendance WHERE id = ?", (new_id,))
+                row = cursor.fetchone()
+                logger.info(f"Attendance created: {new_id}")
+                return AttendanceResponse(**dict(row))
     
     def get_attendance(
         self, 
@@ -97,19 +124,32 @@ class AttendanceService:
         Returns:
             List of attendance responses
         """
-        if filter_date:
-            rows = self.db.execute(
-                "SELECT * FROM attendance WHERE date = ? ORDER BY date DESC",
-                (str(filter_date),),
-                fetch_all=True
-            )
+        if self.db.is_mongodb:
+            # MongoDB
+            query = {}
+            if filter_date:
+                query["date"] = str(filter_date)
+            docs = self.db.find_many(ATTENDANCE_COLLECTION, query, limit=10000)
+            # Convert _id to id if needed
+            for doc in docs:
+                if "_id" in doc and "id" not in doc:
+                    doc["id"] = str(doc.pop("_id"))
+            return [AttendanceResponse(**doc) for doc in docs]
         else:
-            rows = self.db.execute(
-                "SELECT * FROM attendance ORDER BY date DESC",
-                fetch_all=True
-            )
-        
-        return [AttendanceResponse(**dict(row)) for row in (rows or [])]
+            # SQLite
+            if filter_date:
+                rows = self.db.execute(
+                    "SELECT * FROM attendance WHERE date = ? ORDER BY date DESC",
+                    (str(filter_date),),
+                    fetch_all=True
+                )
+            else:
+                rows = self.db.execute(
+                    "SELECT * FROM attendance ORDER BY date DESC",
+                    fetch_all=True
+                )
+            
+            return [AttendanceResponse(**dict(row)) for row in (rows or [])]
     
     def get_employee_attendance(self, employee_id: str) -> List[AttendanceResponse]:
         """
@@ -128,16 +168,30 @@ class AttendanceService:
         if not self.employee_service.employee_exists(employee_id):
             raise_not_found("Employee", employee_id)
         
-        rows = self.db.execute(
-            """
-            SELECT * FROM attendance 
-            WHERE employee_id = ? 
-            ORDER BY date DESC
-            """,
-            (employee_id,),
-            fetch_all=True
-        )
-        return [AttendanceResponse(**dict(row)) for row in (rows or [])]
+        if self.db.is_mongodb:
+            # MongoDB
+            docs = self.db.find_many(
+                ATTENDANCE_COLLECTION,
+                {"employee_id": employee_id},
+                limit=10000
+            )
+            # Convert _id to id if needed
+            for doc in docs:
+                if "_id" in doc and "id" not in doc:
+                    doc["id"] = str(doc.pop("_id"))
+            return [AttendanceResponse(**doc) for doc in docs]
+        else:
+            # SQLite
+            rows = self.db.execute(
+                """
+                SELECT * FROM attendance 
+                WHERE employee_id = ? 
+                ORDER BY date DESC
+                """,
+                (employee_id,),
+                fetch_all=True
+            )
+            return [AttendanceResponse(**dict(row)) for row in (rows or [])]
     
     def get_employee_attendance_summary(
         self, 
@@ -158,33 +212,48 @@ class AttendanceService:
         # Verify employee exists and get name
         employee = self.employee_service.get_employee(employee_id)
         
-        # Count present days
-        present_row = self.db.execute(
-            """
-            SELECT COUNT(*) as count 
-            FROM attendance 
-            WHERE employee_id = ? AND status = 'Present'
-            """,
-            (employee_id,),
-            fetch_one=True
-        )
-        
-        # Count absent days
-        absent_row = self.db.execute(
-            """
-            SELECT COUNT(*) as count 
-            FROM attendance 
-            WHERE employee_id = ? AND status = 'Absent'
-            """,
-            (employee_id,),
-            fetch_one=True
-        )
+        if self.db.is_mongodb:
+            # MongoDB - count present and absent
+            total_present = self.db.count_documents(
+                ATTENDANCE_COLLECTION,
+                {"employee_id": employee_id, "status": "Present"}
+            )
+            total_absent = self.db.count_documents(
+                ATTENDANCE_COLLECTION,
+                {"employee_id": employee_id, "status": "Absent"}
+            )
+        else:
+            # SQLite
+            # Count present days
+            present_row = self.db.execute(
+                """
+                SELECT COUNT(*) as count 
+                FROM attendance 
+                WHERE employee_id = ? AND status = 'Present'
+                """,
+                (employee_id,),
+                fetch_one=True
+            )
+            
+            # Count absent days
+            absent_row = self.db.execute(
+                """
+                SELECT COUNT(*) as count 
+                FROM attendance 
+                WHERE employee_id = ? AND status = 'Absent'
+                """,
+                (employee_id,),
+                fetch_one=True
+            )
+            
+            total_present = present_row["count"] if present_row else 0
+            total_absent = absent_row["count"] if absent_row else 0
         
         return EmployeeAttendanceSummary(
             employee_id=employee_id,
             name=employee.name,
-            total_present=present_row["count"] if present_row else 0,
-            total_absent=absent_row["count"] if absent_row else 0
+            total_present=total_present,
+            total_absent=total_absent
         )
     
     def update_attendance(
@@ -205,25 +274,59 @@ class AttendanceService:
         Raises:
             NotFoundException: If record not found
         """
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
+        if self.db.is_mongodb:
+            # MongoDB
+            from bson.objectid import ObjectId
             
-            # Update record
-            cursor.execute(
-                "UPDATE attendance SET status = ? WHERE id = ?",
-                (attendance_update.status, attendance_id)
-            )
+            # Try to find by ObjectId or string id
+            try:
+                doc = self.db.find_one(ATTENDANCE_COLLECTION, {"_id": ObjectId(str(attendance_id))})
+            except Exception:
+                doc = None
             
-            if cursor.rowcount == 0:
+            if not doc:
+                # Try finding by string id field
+                doc = self.db.find_one(ATTENDANCE_COLLECTION, {"id": str(attendance_id)})
+            
+            if not doc:
                 raise_not_found("Attendance record", str(attendance_id))
             
-            conn.commit()
+            # Update the document
+            query_id = {"_id": doc["_id"]} if "_id" in doc else {"id": str(attendance_id)}
+            self.db.update_one(
+                ATTENDANCE_COLLECTION,
+                query_id,
+                {"$set": {"status": attendance_update.status}}
+            )
+            
             logger.info(f"Attendance updated: {attendance_id}")
             
             # Fetch updated record
-            cursor.execute("SELECT * FROM attendance WHERE id = ?", (attendance_id,))
-            row = cursor.fetchone()
-            return AttendanceResponse(**dict(row))
+            updated = self.db.find_one(ATTENDANCE_COLLECTION, query_id)
+            if "_id" in updated and "id" not in updated:
+                updated["id"] = str(updated.pop("_id"))
+            return AttendanceResponse(**updated)
+        else:
+            # SQLite
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Update record
+                cursor.execute(
+                    "UPDATE attendance SET status = ? WHERE id = ?",
+                    (attendance_update.status, attendance_id)
+                )
+                
+                if cursor.rowcount == 0:
+                    raise_not_found("Attendance record", str(attendance_id))
+                
+                conn.commit()
+                logger.info(f"Attendance updated: {attendance_id}")
+                
+                # Fetch updated record
+                cursor.execute("SELECT * FROM attendance WHERE id = ?", (attendance_id,))
+                row = cursor.fetchone()
+                return AttendanceResponse(**dict(row))
     
     def delete_attendance(self, attendance_id: int) -> None:
         """
@@ -235,15 +338,42 @@ class AttendanceService:
         Raises:
             NotFoundException: If record not found
         """
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM attendance WHERE id = ?", (attendance_id,))
+        if self.db.is_mongodb:
+            # MongoDB
+            from bson.objectid import ObjectId
             
-            if cursor.rowcount == 0:
+            # Try to find and delete by ObjectId or string id
+            result = False
+            try:
+                result = self.db.delete_one(
+                    ATTENDANCE_COLLECTION,
+                    {"_id": ObjectId(str(attendance_id))}
+                )
+            except Exception:
+                pass
+            
+            if not result:
+                # Try deleting by string id field
+                result = self.db.delete_one(
+                    ATTENDANCE_COLLECTION,
+                    {"id": str(attendance_id)}
+                )
+            
+            if not result:
                 raise_not_found("Attendance record", str(attendance_id))
             
-            conn.commit()
             logger.info(f"Attendance deleted: {attendance_id}")
+        else:
+            # SQLite
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM attendance WHERE id = ?", (attendance_id,))
+                
+                if cursor.rowcount == 0:
+                    raise_not_found("Attendance record", str(attendance_id))
+                
+                conn.commit()
+                logger.info(f"Attendance deleted: {attendance_id}")
     
     def get_dashboard_summary(self) -> DashboardSummary:
         """
@@ -252,28 +382,45 @@ class AttendanceService:
         Returns:
             Dashboard summary with employee and attendance counts
         """
-        # Total employees
-        employee_row = self.db.execute(
-            "SELECT COUNT(*) as count FROM employees",
-            fetch_one=True
-        )
-        
-        # Total present
-        present_row = self.db.execute(
-            "SELECT COUNT(*) as count FROM attendance WHERE status = 'Present'",
-            fetch_one=True
-        )
-        
-        # Total absent
-        absent_row = self.db.execute(
-            "SELECT COUNT(*) as count FROM attendance WHERE status = 'Absent'",
-            fetch_one=True
-        )
+        if self.db.is_mongodb:
+            # MongoDB
+            total_employees = self.db.count_documents(EMPLOYEE_COLLECTION)
+            total_present = self.db.count_documents(
+                ATTENDANCE_COLLECTION,
+                {"status": "Present"}
+            )
+            total_absent = self.db.count_documents(
+                ATTENDANCE_COLLECTION,
+                {"status": "Absent"}
+            )
+        else:
+            # SQLite
+            # Total employees
+            employee_row = self.db.execute(
+                "SELECT COUNT(*) as count FROM employees",
+                fetch_one=True
+            )
+            
+            # Total present
+            present_row = self.db.execute(
+                "SELECT COUNT(*) as count FROM attendance WHERE status = 'Present'",
+                fetch_one=True
+            )
+            
+            # Total absent
+            absent_row = self.db.execute(
+                "SELECT COUNT(*) as count FROM attendance WHERE status = 'Absent'",
+                fetch_one=True
+            )
+            
+            total_employees = employee_row["count"] if employee_row else 0
+            total_present = present_row["count"] if present_row else 0
+            total_absent = absent_row["count"] if absent_row else 0
         
         return DashboardSummary(
-            total_employees=employee_row["count"] if employee_row else 0,
-            total_present=present_row["count"] if present_row else 0,
-            total_absent=absent_row["count"] if absent_row else 0
+            total_employees=total_employees,
+            total_present=total_present,
+            total_absent=total_absent
         )
 
 

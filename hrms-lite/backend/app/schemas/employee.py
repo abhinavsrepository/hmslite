@@ -32,18 +32,28 @@ class EmployeeUpdate(BaseModel):
     department: str | None = Field(None, min_length=1, max_length=50)
 
 
-class EmployeeInDB(EmployeeBase):
+class EmployeeInDB(BaseModel):
     """Schema representing employee as stored in database."""
     id: str = Field(..., description="Unique employee ID")
-    created_at: datetime = Field(..., description="Record creation timestamp")
+    name: str = Field(..., description="Employee full name")
+    email: str = Field(..., description="Employee email address")
+    department: str = Field(..., description="Department name")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
     
     class Config:
         from_attributes = True
 
 
-class EmployeeResponse(EmployeeInDB):
+class EmployeeResponse(BaseModel):
     """Schema for employee API responses."""
-    pass
+    id: str = Field(..., description="Unique employee ID")
+    name: str = Field(..., description="Employee full name")
+    email: str = Field(..., description="Employee email address")
+    department: str = Field(..., description="Department name")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
+    
+    class Config:
+        from_attributes = True
 
 
 class EmployeeListResponse(BaseModel):
