@@ -257,8 +257,8 @@ class AttendanceService:
         )
     
     def update_attendance(
-        self, 
-        attendance_id: int, 
+        self,
+        attendance_id: str,
         attendance_update: AttendanceUpdate
     ) -> AttendanceResponse:
         """
@@ -328,7 +328,7 @@ class AttendanceService:
                 row = cursor.fetchone()
                 return AttendanceResponse(**dict(row))
     
-    def delete_attendance(self, attendance_id: int) -> None:
+    def delete_attendance(self, attendance_id: str) -> None:
         """
         Delete an attendance record.
         

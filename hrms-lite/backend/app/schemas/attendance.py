@@ -46,7 +46,7 @@ class AttendanceUpdate(BaseModel):
 
 class AttendanceInDB(BaseModel):
     """Schema representing attendance as stored in database."""
-    id: int
+    id: str
     employee_id: str
     date: str
     status: str

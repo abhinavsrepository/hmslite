@@ -131,7 +131,7 @@ def get_employee_attendance_summary(
     description="Update an existing attendance record"
 )
 def update_attendance(
-    attendance_id: int,
+    attendance_id: str,
     attendance: AttendanceUpdate,
     service: AttendanceService = Depends(get_attendance_service)
 ) -> AttendanceResponse:
@@ -157,7 +157,7 @@ def update_attendance(
     description="Delete an attendance record by ID"
 )
 def delete_attendance(
-    attendance_id: int,
+    attendance_id: str,
     service: AttendanceService = Depends(get_attendance_service)
 ) -> None:
     """
