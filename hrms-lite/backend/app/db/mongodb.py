@@ -29,12 +29,20 @@ class MongoDB:
     def connect(self) -> None:
         """Establish MongoDB connection."""
         try:
+            uri = self.settings.MONGODB_URI.strip().strip('"').strip("'")
+            if not uri:
+                raise ValueError("MONGODB_URI is empty. Set it as an environment variable.")
+
+            # Log masked URI for debugging
+            masked = uri[:20] + "***" + uri[-30:] if len(uri) > 50 else "***"
+            logger.info(f"Connecting to MongoDB: {masked}")
+
             self.client = MongoClient(
-                self.settings.MONGODB_URI,
+                uri,
                 serverSelectionTimeoutMS=5000,
                 connectTimeoutMS=5000,
             )
-        
+
             self.client.admin.command("ping")
             self.db = self.client[self.settings.MONGODB_DB_NAME]
             logger.info("Successfully connected to MongoDB")
